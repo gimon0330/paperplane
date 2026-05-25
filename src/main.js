@@ -11,13 +11,14 @@ const resultDistanceEl = document.querySelector("#result-distance");
 const resultBestEl = document.querySelector("#result-best");
 const restartBtn = document.querySelector("#restart-btn");
 
-const controlButtons = {
+const buttons = {
   left: document.querySelector("#left-btn"),
   down: document.querySelector("#down-btn"),
   right: document.querySelector("#right-btn"),
 };
 
 const BEST_KEY = "paperplane.bestDistance.v1";
+const MAX_LAUNCH_ANGLE = 90;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8bd3ff);
@@ -32,50 +33,30 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const clock = new THREE.Clock();
 
-const input = {
-  left: false,
-  right: false,
-  down: false,
-};
+const input = { left: false, right: false, down: false };
 
 const game = {
   state: "ready",
-  launchAngle: 45,
-  angleDirection: 1,
+  launchAngle: 0,
   launchTimer: 0,
   boost: 100,
   distance: 0,
   bestDistance: Number(localStorage.getItem(BEST_KEY) || 0),
-  endedBy: "",
 };
 
 const physics = {
-  position: new THREE.Vector3(0, 1.55, 0),
+  position: new THREE.Vector3(0, 1.55, -1.2),
   velocity: new THREE.Vector3(),
   rollTarget: 0,
 };
 
-const world = {
-  trees: [],
-  clouds: [],
-  laneWidth: 22,
-  maxTreeZ: 0,
-};
+const world = { trees: [], clouds: [] };
 
 const materials = {
   ground: new THREE.MeshStandardMaterial({ color: 0x6fcf79, roughness: 0.92 }),
   path: new THREE.MeshStandardMaterial({ color: 0xd8c68a, roughness: 0.96 }),
-  paper: new THREE.MeshStandardMaterial({
-    color: 0xf8fafc,
-    roughness: 0.55,
-    metalness: 0.02,
-    side: THREE.DoubleSide,
-  }),
-  paperFold: new THREE.MeshStandardMaterial({
-    color: 0xdbeafe,
-    roughness: 0.58,
-    side: THREE.DoubleSide,
-  }),
+  paper: new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.55, side: THREE.DoubleSide }),
+  paperFold: new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.58, side: THREE.DoubleSide }),
   trunk: new THREE.MeshStandardMaterial({ color: 0x7c4a2d, roughness: 0.85 }),
   leaf: new THREE.MeshStandardMaterial({ color: 0x1f8a4c, roughness: 0.9 }),
   darkLeaf: new THREE.MeshStandardMaterial({ color: 0x146c43, roughness: 0.9 }),
@@ -92,10 +73,10 @@ setupLights();
 setupWorld();
 setupControls();
 resetGame();
+animate();
 
 function setupLights() {
-  const ambient = new THREE.HemisphereLight(0xdff7ff, 0x69a36f, 1.8);
-  scene.add(ambient);
+  scene.add(new THREE.HemisphereLight(0xdff7ff, 0x69a36f, 1.8));
 
   const sun = new THREE.DirectionalLight(0xffffff, 2.4);
   sun.position.set(-35, 70, -20);
@@ -125,22 +106,15 @@ function setupWorld() {
   for (let z = 28; z < 720; z += 18) {
     const safeGap = z < 90 ? 7.5 : 4.5;
     const side = Math.random() > 0.5 ? 1 : -1;
-    const x = side * (safeGap + Math.random() * 16);
-    addTree(x, z, 0.85 + Math.random() * 0.75);
+    addTree(side * (safeGap + Math.random() * 16), z, 0.85 + Math.random() * 0.75);
 
     if (Math.random() > 0.45) {
       addTree(-side * (safeGap + 7 + Math.random() * 22), z + Math.random() * 9, 0.75 + Math.random() * 0.8);
     }
-    world.maxTreeZ = z;
   }
 
   for (let i = 0; i < 22; i += 1) {
-    addCloud(
-      -55 + Math.random() * 110,
-      22 + Math.random() * 28,
-      20 + Math.random() * 580,
-      0.7 + Math.random() * 1.4
-    );
+    addCloud(-55 + Math.random() * 110, 22 + Math.random() * 28, 20 + Math.random() * 580, 0.7 + Math.random() * 1.4);
   }
 
   scene.add(human.group);
@@ -149,41 +123,25 @@ function setupWorld() {
 
 function createPaperPlane() {
   const group = new THREE.Group();
-
   const vertices = new Float32Array([
-    0, 0.05, 2.2,
-    -1.25, 0, -1.15,
-    0, 0.12, -0.62,
-
-    0, 0.05, 2.2,
-    0, 0.12, -0.62,
-    1.25, 0, -1.15,
-
-    0, 0.05, 2.2,
-    0, -0.22, -0.42,
-    0, 0.12, -0.62,
-
-    0, 0.12, -0.62,
-    -0.42, 0.02, -1.08,
-    0, -0.22, -0.42,
-
-    0, 0.12, -0.62,
-    0, -0.22, -0.42,
-    0.42, 0.02, -1.08,
+    0, 0.05, 2.2, -1.25, 0, -1.15, 0, 0.12, -0.62,
+    0, 0.05, 2.2, 0, 0.12, -0.62, 1.25, 0, -1.15,
+    0, 0.05, 2.2, 0, -0.22, -0.42, 0, 0.12, -0.62,
+    0, 0.12, -0.62, -0.42, 0.02, -1.08, 0, -0.22, -0.42,
+    0, 0.12, -0.62, 0, -0.22, -0.42, 0.42, 0.02, -1.08,
   ]);
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
   geometry.computeVertexNormals();
 
-  const mesh = new THREE.Mesh(geometry, [materials.paper, materials.paperFold]);
+  const mesh = new THREE.Mesh(geometry, materials.paper);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   group.add(mesh);
 
   const fold = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 3.05), materials.paperFold);
   fold.position.z = 0.35;
-  fold.rotation.x = 0.02;
   group.add(fold);
 
   group.scale.setScalar(0.85);
@@ -214,13 +172,21 @@ function createHuman() {
   group.add(rightLeg);
 
   const shoulder = new THREE.Group();
-  shoulder.position.set(0.32, 2.0, 0.05);
+  shoulder.position.set(0.34, 2.03, 0.08);
   group.add(shoulder);
 
-  const arm = createLimb(0.09, 0.92, materials.skin);
-  arm.position.y = -0.42;
-  arm.rotation.z = -0.4;
-  shoulder.add(arm);
+  const throwingArm = new THREE.Group();
+  throwingArm.rotation.z = -0.38;
+  shoulder.add(throwingArm);
+
+  const arm = createLimb(0.09, 0.96, materials.skin);
+  arm.position.y = -0.48;
+  throwingArm.add(arm);
+
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), materials.skin);
+  hand.position.set(0, -1.0, 0);
+  hand.castShadow = true;
+  throwingArm.add(hand);
 
   const leftArm = createLimb(0.08, 0.72, materials.skin);
   leftArm.position.set(-0.38, 1.68, 0.02);
@@ -229,13 +195,13 @@ function createHuman() {
 
   const heldPlane = paperPlane.group.clone();
   heldPlane.name = "held-plane";
-  heldPlane.scale.setScalar(0.38);
-  heldPlane.position.set(0.08, -0.86, 0.36);
-  heldPlane.rotation.x = 1.2;
-  heldPlane.rotation.y = 0.05;
-  shoulder.add(heldPlane);
+  heldPlane.scale.setScalar(0.42);
+  heldPlane.position.set(0, -1.0, 0.46);
+  heldPlane.rotation.x = 1.25;
+  heldPlane.rotation.y = 0.04;
+  throwingArm.add(heldPlane);
 
-  return { group, shoulder, heldPlane };
+  return { group, shoulder, throwingArm, hand, heldPlane };
 }
 
 function createLimb(radius, height, material) {
@@ -265,13 +231,7 @@ function addTree(x, z, scale) {
   group.add(crown2);
 
   scene.add(group);
-  world.trees.push({
-    group,
-    x,
-    z,
-    radius: 1.15 * scale,
-    height: 5.0 * scale,
-  });
+  world.trees.push({ group, x, z, radius: 1.15 * scale, height: 5.0 * scale });
 }
 
 function addCloud(x, y, z, scale) {
@@ -290,10 +250,9 @@ function addCloud(x, y, z, scale) {
 }
 
 function setupControls() {
-  bindButton(controlButtons.left, "left");
-  bindButton(controlButtons.right, "right");
-  bindButton(controlButtons.down, "down");
-
+  bindButton(buttons.left, "left");
+  bindButton(buttons.right, "right");
+  bindButton(buttons.down, "down");
   restartBtn.addEventListener("click", resetGame);
 
   window.addEventListener("keydown", (event) => {
@@ -304,41 +263,20 @@ function setupControls() {
       return;
     }
 
-    if (key === "arrowleft" || key === "a") {
-      input.left = true;
-      controlButtons.left.classList.add("is-pressed");
-    }
-
-    if (key === "arrowright" || key === "d") {
-      input.right = true;
-      controlButtons.right.classList.add("is-pressed");
-    }
-
-    if ((key === "arrowdown" || key === "s") && !event.repeat) {
-      input.down = true;
-      controlButtons.down.classList.add("is-pressed");
-    }
+    if (key === "arrowleft" || key === "a") setInput("left", true);
+    if (key === "arrowright" || key === "d") setInput("right", true);
+    if ((key === "arrowdown" || key === "s") && !event.repeat) setInput("down", true);
   });
 
   window.addEventListener("keyup", (event) => {
     const key = event.key.toLowerCase();
 
-    if (key === "arrowleft" || key === "a") {
-      input.left = false;
-      controlButtons.left.classList.remove("is-pressed");
-    }
-
-    if (key === "arrowright" || key === "d") {
-      input.right = false;
-      controlButtons.right.classList.remove("is-pressed");
-    }
+    if (key === "arrowleft" || key === "a") setInput("left", false);
+    if (key === "arrowright" || key === "d") setInput("right", false);
 
     if (key === "arrowdown" || key === "s") {
-      if (game.state === "ready" && input.down) {
-        beginLaunch();
-      }
-      input.down = false;
-      controlButtons.down.classList.remove("is-pressed");
+      if (game.state === "ready" && input.down) beginLaunch();
+      setInput("down", false);
     }
   });
 
@@ -348,18 +286,13 @@ function setupControls() {
 function bindButton(button, action) {
   const press = (event) => {
     event.preventDefault();
-    if (game.state === "gameover") return;
-    input[action] = true;
-    button.classList.add("is-pressed");
+    if (game.state !== "gameover") setInput(action, true);
   };
 
   const release = (event) => {
     event.preventDefault();
-    if (action === "down" && game.state === "ready" && input.down) {
-      beginLaunch();
-    }
-    input[action] = false;
-    button.classList.remove("is-pressed");
+    if (action === "down" && game.state === "ready" && input.down) beginLaunch();
+    setInput(action, false);
   };
 
   button.addEventListener("pointerdown", press);
@@ -370,37 +303,35 @@ function bindButton(button, action) {
   });
 }
 
+function setInput(action, value) {
+  input[action] = value;
+  buttons[action]?.classList.toggle("is-pressed", value);
+}
+
 function resetGame() {
   resultDialog.close();
 
   game.state = "ready";
-  game.launchAngle = 45;
-  game.angleDirection = 1;
+  game.launchAngle = 0;
   game.launchTimer = 0;
   game.boost = 100;
   game.distance = 0;
-  game.endedBy = "";
 
   physics.position.set(0, 1.55, -1.2);
   physics.velocity.set(0, 0, 0);
   physics.rollTarget = 0;
 
-  input.left = false;
-  input.right = false;
-  input.down = false;
-
-  for (const button of Object.values(controlButtons)) {
-    button.classList.remove("is-pressed");
-  }
+  setInput("left", false);
+  setInput("right", false);
+  setInput("down", false);
 
   paperPlane.group.visible = false;
   paperPlane.group.position.copy(physics.position);
   paperPlane.group.rotation.set(0, 0, 0);
 
   human.group.visible = true;
-  human.shoulder.rotation.set(0.9, 0, -0.42);
   human.heldPlane.visible = true;
-
+  updateThrowingPose(false);
   updateUi();
 }
 
@@ -408,14 +339,13 @@ function beginLaunch() {
   if (game.state !== "ready") return;
   game.state = "launch";
   game.launchTimer = 0;
-  input.down = false;
-  controlButtons.down.classList.remove("is-pressed");
+  setInput("down", false);
 }
 
 function releasePlane() {
   const angleRad = THREE.MathUtils.degToRad(game.launchAngle);
-  const angleBonus = 1 - Math.min(Math.abs(game.launchAngle - 45) / 38, 0.65);
-  const speed = 23 + angleBonus * 5;
+  const angleBonus = 1 - Math.min(Math.abs(game.launchAngle - 45) / 45, 0.78);
+  const speed = 22 + angleBonus * 7;
 
   physics.position.set(0, 1.65, -1.1);
   physics.velocity.set(0, Math.sin(angleRad) * speed, Math.cos(angleRad) * speed);
@@ -425,42 +355,45 @@ function releasePlane() {
   paperPlane.group.rotation.set(-angleRad, 0, 0);
 
   human.heldPlane.visible = false;
+  game.boost = 100;
   game.state = "flight";
 }
 
 function updateReady(dt) {
-  human.shoulder.rotation.x = 0.88 + Math.sin(performance.now() * 0.004) * 0.025;
-
   if (input.down) {
-    game.launchAngle += game.angleDirection * dt * 58;
-
-    if (game.launchAngle >= 68) {
-      game.launchAngle = 68;
-      game.angleDirection = -1;
-    }
-
-    if (game.launchAngle <= 18) {
-      game.launchAngle = 18;
-      game.angleDirection = 1;
-    }
+    game.launchAngle = Math.min(MAX_LAUNCH_ANGLE, game.launchAngle + dt * 62);
   }
 
+  updateThrowingPose(input.down);
   camera.position.lerp(new THREE.Vector3(0, 4.6, -12.5), 0.08);
   camera.lookAt(0, 1.7, 0);
+}
+
+function updateThrowingPose(isCharging) {
+  const angleT = THREE.MathUtils.clamp(game.launchAngle / MAX_LAUNCH_ANGLE, 0, 1);
+  const idle = isCharging ? 0 : Math.sin(performance.now() * 0.004) * 0.025;
+
+  human.shoulder.rotation.x = THREE.MathUtils.lerp(0.7, 1.88, angleT) + idle;
+  human.shoulder.rotation.y = THREE.MathUtils.lerp(0, -0.12, angleT);
+  human.shoulder.rotation.z = 0;
+  human.throwingArm.rotation.z = THREE.MathUtils.lerp(-0.38, -0.82, angleT);
 }
 
 function updateLaunch(dt) {
   game.launchTimer += dt;
   const t = Math.min(game.launchTimer / 0.34, 1);
-  human.shoulder.rotation.x = THREE.MathUtils.lerp(0.9, -1.05, easeOutCubic(t));
-  human.shoulder.rotation.z = THREE.MathUtils.lerp(-0.42, -0.02, t);
+  const angleT = THREE.MathUtils.clamp(game.launchAngle / MAX_LAUNCH_ANGLE, 0, 1);
+  const startShoulderX = THREE.MathUtils.lerp(0.7, 1.88, angleT);
+  const startArmZ = THREE.MathUtils.lerp(-0.38, -0.82, angleT);
+
+  human.shoulder.rotation.x = THREE.MathUtils.lerp(startShoulderX, -1.05, easeOutCubic(t));
+  human.shoulder.rotation.y = THREE.MathUtils.lerp(-0.12 * angleT, 0.05, t);
+  human.throwingArm.rotation.z = THREE.MathUtils.lerp(startArmZ, -0.06, t);
 
   camera.position.lerp(new THREE.Vector3(0, 4.4, -11.0), 0.1);
   camera.lookAt(0, 1.8, 0.8);
 
-  if (game.launchTimer >= 0.34) {
-    releasePlane();
-  }
+  if (game.launchTimer >= 0.34) releasePlane();
 }
 
 function updateFlight(dt) {
@@ -468,10 +401,7 @@ function updateFlight(dt) {
   const horizontalSpeed = Math.hypot(physics.velocity.x, physics.velocity.z);
 
   physics.velocity.y -= 9.8 * dt;
-
-  const lift = Math.max(0, horizontalSpeed - 6) * 0.19;
-  physics.velocity.y += lift * dt;
-
+  physics.velocity.y += Math.max(0, horizontalSpeed - 6) * 0.19 * dt;
   physics.velocity.x += steer * 9.2 * dt;
   physics.rollTarget = THREE.MathUtils.lerp(physics.rollTarget, -steer * 0.62, 0.12);
 
@@ -481,40 +411,29 @@ function updateFlight(dt) {
     game.boost = Math.max(0, game.boost - 27 * dt);
   }
 
-  const drag = Math.max(0.965, 1 - 0.055 * dt);
-  physics.velocity.multiplyScalar(drag);
-
+  physics.velocity.multiplyScalar(Math.max(0.965, 1 - 0.055 * dt));
   physics.position.addScaledVector(physics.velocity, dt);
   game.distance = Math.max(0, physics.position.z + 1.2);
 
   paperPlane.group.position.copy(physics.position);
-
   const yaw = Math.atan2(physics.velocity.x, physics.velocity.z);
   const pitch = -Math.atan2(physics.velocity.y, Math.max(0.001, horizontalSpeed));
   paperPlane.group.rotation.set(pitch, yaw, physics.rollTarget);
 
   recycleClouds();
-
-  const followOffset = new THREE.Vector3(-physics.velocity.x * 0.08, 4.2, -11.5);
-  const cameraTarget = physics.position.clone().add(followOffset);
-  camera.position.lerp(cameraTarget, 0.055);
+  const target = physics.position.clone().add(new THREE.Vector3(-physics.velocity.x * 0.08, 4.2, -11.5));
+  camera.position.lerp(target, 0.055);
   camera.lookAt(physics.position.x, physics.position.y + 0.45, physics.position.z + 7.5);
 
-  if (physics.position.y <= 0.24) {
-    endGame("landed");
-  } else {
-    checkTreeCollision();
-  }
+  if (physics.position.y <= 0.24) endGame("landed");
+  else checkTreeCollision();
 }
 
 function checkTreeCollision() {
   for (const tree of world.trees) {
     if (Math.abs(physics.position.z - tree.z) > tree.radius + 1.35) continue;
 
-    const dx = physics.position.x - tree.x;
-    const dz = physics.position.z - tree.z;
-    const horizontalDistance = Math.hypot(dx, dz);
-
+    const horizontalDistance = Math.hypot(physics.position.x - tree.x, physics.position.z - tree.z);
     if (horizontalDistance < tree.radius + 0.55 && physics.position.y < tree.height) {
       endGame("hit a tree");
       return;
@@ -524,9 +443,7 @@ function checkTreeCollision() {
 
 function endGame(reason) {
   if (game.state === "gameover") return;
-
   game.state = "gameover";
-  game.endedBy = reason;
 
   if (game.distance > game.bestDistance) {
     game.bestDistance = game.distance;
@@ -553,9 +470,14 @@ function updateUi() {
   distanceEl.textContent = formatDistance(game.distance);
   bestDistanceEl.textContent = formatDistance(game.bestDistance);
   angleEl.textContent = `${Math.round(game.launchAngle)}°`;
-  boostFillEl.style.width = `${game.boost}%`;
 
-  if (game.boost < 15) {
+  const launchMeter = game.state === "ready" || game.state === "launch";
+  const meterPercent = launchMeter ? (game.launchAngle / MAX_LAUNCH_ANGLE) * 100 : game.boost;
+  boostFillEl.style.width = `${THREE.MathUtils.clamp(meterPercent, 0, 100)}%`;
+
+  if (launchMeter) {
+    boostFillEl.style.background = "linear-gradient(90deg, #38bdf8, #a7f3d0)";
+  } else if (game.boost < 15) {
     boostFillEl.style.background = "linear-gradient(90deg, #fb7185, #fda4af)";
   } else {
     boostFillEl.style.background = "linear-gradient(90deg, #34d399, #7dd3fc)";
@@ -563,8 +485,10 @@ function updateUi() {
 
   if (game.state === "ready") {
     phaseTextEl.textContent = input.down
-      ? "Release ↓ to throw the plane."
-      : "Hold ↓ to set angle, release to throw.";
+      ? game.launchAngle >= MAX_LAUNCH_ANGLE
+        ? "Angle maxed at 90°. Release ↓ to throw."
+        : "Charging launch angle... release ↓ to throw."
+      : "Hold ↓ to raise angle from 0° to 90°, release to throw.";
   } else if (game.state === "launch") {
     phaseTextEl.textContent = "Throwing...";
   } else if (game.state === "flight") {
@@ -592,13 +516,10 @@ function easeOutCubic(t) {
 function animate() {
   const dt = Math.min(clock.getDelta(), 1 / 30);
 
-  if (game.state === "ready") {
-    updateReady(dt);
-  } else if (game.state === "launch") {
-    updateLaunch(dt);
-  } else if (game.state === "flight") {
-    updateFlight(dt);
-  } else {
+  if (game.state === "ready") updateReady(dt);
+  else if (game.state === "launch") updateLaunch(dt);
+  else if (game.state === "flight") updateFlight(dt);
+  else {
     camera.position.lerp(new THREE.Vector3(physics.position.x, 4.5, physics.position.z - 10), 0.03);
     camera.lookAt(physics.position.x, physics.position.y + 0.25, physics.position.z + 6);
   }
@@ -607,5 +528,3 @@ function animate() {
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
-
-animate();
