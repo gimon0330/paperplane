@@ -64,7 +64,7 @@ const physics = {
   rollTarget: 0,
 };
 
-const world = { trees: [], clouds: [] };
+const world = { trees: [], clouds: [], airObstacles: [] };
 
 const materials = {
   ground: new THREE.MeshStandardMaterial({ color: 0x6fcf79, roughness: 0.92 }),
@@ -78,6 +78,8 @@ const materials = {
   shirt: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.78 }),
   pants: new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.82 }),
   cloud: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }),
+  skyRing: new THREE.MeshStandardMaterial({ color: 0xfb923c, roughness: 0.35, metalness: 0.05 }),
+  skyMarker: new THREE.MeshStandardMaterial({ color: 0xffedd5, roughness: 0.7 }),
 };
 
 const paperPlane = createPaperPlane();
@@ -125,6 +127,10 @@ function setupWorld() {
     if (Math.random() > 0.45) {
       addTree(-side * (safeGap + 7 + Math.random() * 22), z + Math.random() * 9, 0.75 + Math.random() * 0.8);
     }
+  }
+
+  for (let z = 115; z < 690; z += 68) {
+    addAirObstacle(-5.5 + Math.random() * 11, 3.0 + Math.random() * 5.8, z, 0.82 + Math.random() * 0.28);
   }
 
   for (let i = 0; i < 22; i += 1) {
@@ -275,6 +281,28 @@ function addTree(x, z, scale) {
 
   scene.add(group);
   world.trees.push({ group, x, z, radius: 1.15 * scale, height: 5.0 * scale });
+}
+
+function addAirObstacle(x, y, z, scale) {
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+  group.scale.setScalar(scale);
+
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.14, 12, 32), materials.skyRing);
+  ring.castShadow = true;
+  group.add(ring);
+
+  const markerTop = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8), materials.skyMarker);
+  markerTop.position.y = 1.1;
+  markerTop.castShadow = true;
+  group.add(markerTop);
+
+  const markerBottom = markerTop.clone();
+  markerBottom.position.y = -1.1;
+  group.add(markerBottom);
+
+  scene.add(group);
+  world.airObstacles.push({ group, x, y, z, radius: 1.08 * scale });
 }
 
 function addCloud(x, y, z, scale) {
@@ -474,7 +502,12 @@ function updateFlight(dt) {
   camera.lookAt(physics.position.x, physics.position.y + 0.45, physics.position.z + 7.5);
 
   if (physics.position.y <= 0.24) endGame("landed");
-  else checkTreeCollision();
+  else checkCollisions();
+}
+
+function checkCollisions() {
+  checkTreeCollision();
+  if (game.state === "flight") checkAirObstacleCollision();
 }
 
 function checkTreeCollision() {
@@ -484,6 +517,16 @@ function checkTreeCollision() {
     const horizontalDistance = Math.hypot(physics.position.x - tree.x, physics.position.z - tree.z);
     if (horizontalDistance < tree.radius + 0.55 && physics.position.y < tree.height) {
       endGame("hit a tree");
+      return;
+    }
+  }
+}
+
+function checkAirObstacleCollision() {
+  for (const obstacle of world.airObstacles) {
+    const distance = physics.position.distanceTo(obstacle.group.position);
+    if (distance < obstacle.radius + 0.45) {
+      endGame("hit a sky ring");
       return;
     }
   }
