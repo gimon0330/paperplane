@@ -171,37 +171,66 @@ function createHuman() {
   rightLeg.position.set(0.16, 0.62, 0);
   group.add(rightLeg);
 
+  const rightShoulderSocket = new THREE.Mesh(new THREE.SphereGeometry(0.125, 16, 12), materials.shirt);
+  rightShoulderSocket.position.set(0.38, 1.98, 0.08);
+  rightShoulderSocket.castShadow = true;
+  group.add(rightShoulderSocket);
+
   const shoulder = new THREE.Group();
-  shoulder.position.set(0.34, 2.03, 0.08);
+  shoulder.position.copy(rightShoulderSocket.position);
   group.add(shoulder);
 
   const throwingArm = new THREE.Group();
-  throwingArm.rotation.z = -0.38;
+  throwingArm.rotation.z = -0.34;
   shoulder.add(throwingArm);
 
   const arm = createLimb(0.09, 0.96, materials.skin);
   arm.position.y = -0.48;
   throwingArm.add(arm);
 
-  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), materials.skin);
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), materials.skin);
   hand.position.set(0, -1.0, 0);
   hand.castShadow = true;
   throwingArm.add(hand);
 
-  const leftArm = createLimb(0.08, 0.72, materials.skin);
-  leftArm.position.set(-0.38, 1.68, 0.02);
-  leftArm.rotation.z = 0.35;
-  group.add(leftArm);
-
   const heldPlane = paperPlane.group.clone();
   heldPlane.name = "held-plane";
   heldPlane.scale.setScalar(0.42);
-  heldPlane.position.set(0, -1.0, 0.46);
-  heldPlane.rotation.x = 1.25;
-  heldPlane.rotation.y = 0.04;
+  heldPlane.position.set(0.02, -1.04, 0.43);
+  heldPlane.rotation.x = 1.2;
+  heldPlane.rotation.y = 0.03;
+  heldPlane.rotation.z = 0;
   throwingArm.add(heldPlane);
 
-  return { group, shoulder, throwingArm, hand, heldPlane };
+  const leftShoulderSocket = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), materials.shirt);
+  leftShoulderSocket.position.set(-0.36, 1.92, 0.04);
+  leftShoulderSocket.castShadow = true;
+  group.add(leftShoulderSocket);
+
+  const leftShoulder = new THREE.Group();
+  leftShoulder.position.copy(leftShoulderSocket.position);
+  leftShoulder.rotation.z = 0.38;
+  leftShoulder.rotation.x = -0.12;
+  group.add(leftShoulder);
+
+  const leftArm = createLimb(0.08, 0.78, materials.skin);
+  leftArm.position.y = -0.39;
+  leftShoulder.add(leftArm);
+
+  const leftHand = new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 12), materials.skin);
+  leftHand.position.set(0, -0.82, 0);
+  leftHand.castShadow = true;
+  leftShoulder.add(leftHand);
+
+  return {
+    group,
+    shoulder,
+    throwingArm,
+    hand,
+    heldPlane,
+    rightShoulderSocket,
+    leftShoulder,
+  };
 }
 
 function createLimb(radius, height, material) {
@@ -371,23 +400,28 @@ function updateReady(dt) {
 
 function updateThrowingPose(isCharging) {
   const angleT = THREE.MathUtils.clamp(game.launchAngle / MAX_LAUNCH_ANGLE, 0, 1);
-  const idle = isCharging ? 0 : Math.sin(performance.now() * 0.004) * 0.025;
+  const idle = isCharging ? 0 : Math.sin(performance.now() * 0.004) * 0.018;
 
-  human.shoulder.rotation.x = THREE.MathUtils.lerp(0.7, 1.88, angleT) + idle;
-  human.shoulder.rotation.y = THREE.MathUtils.lerp(0, -0.12, angleT);
-  human.shoulder.rotation.z = 0;
-  human.throwingArm.rotation.z = THREE.MathUtils.lerp(-0.38, -0.82, angleT);
+  human.shoulder.position.copy(human.rightShoulderSocket.position);
+  human.shoulder.rotation.x = THREE.MathUtils.lerp(0.42, 1.72, angleT) + idle;
+  human.shoulder.rotation.y = THREE.MathUtils.lerp(0.08, -0.18, angleT);
+  human.shoulder.rotation.z = THREE.MathUtils.lerp(-0.04, -0.14, angleT);
+  human.throwingArm.rotation.z = THREE.MathUtils.lerp(-0.34, -0.88, angleT);
 }
 
 function updateLaunch(dt) {
   game.launchTimer += dt;
   const t = Math.min(game.launchTimer / 0.34, 1);
   const angleT = THREE.MathUtils.clamp(game.launchAngle / MAX_LAUNCH_ANGLE, 0, 1);
-  const startShoulderX = THREE.MathUtils.lerp(0.7, 1.88, angleT);
-  const startArmZ = THREE.MathUtils.lerp(-0.38, -0.82, angleT);
+  const startShoulderX = THREE.MathUtils.lerp(0.42, 1.72, angleT);
+  const startShoulderY = THREE.MathUtils.lerp(0.08, -0.18, angleT);
+  const startShoulderZ = THREE.MathUtils.lerp(-0.04, -0.14, angleT);
+  const startArmZ = THREE.MathUtils.lerp(-0.34, -0.88, angleT);
 
+  human.shoulder.position.copy(human.rightShoulderSocket.position);
   human.shoulder.rotation.x = THREE.MathUtils.lerp(startShoulderX, -1.05, easeOutCubic(t));
-  human.shoulder.rotation.y = THREE.MathUtils.lerp(-0.12 * angleT, 0.05, t);
+  human.shoulder.rotation.y = THREE.MathUtils.lerp(startShoulderY, 0.05, t);
+  human.shoulder.rotation.z = THREE.MathUtils.lerp(startShoulderZ, 0.04, t);
   human.throwingArm.rotation.z = THREE.MathUtils.lerp(startArmZ, -0.06, t);
 
   camera.position.lerp(new THREE.Vector3(0, 4.4, -11.0), 0.1);
