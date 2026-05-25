@@ -158,7 +158,7 @@ function createPaperPlane() {
   fold.position.z = 0.35;
   group.add(fold);
 
-  group.scale.setScalar(0.85);
+  group.scale.setScalar(0.72);
   return { group };
 }
 
@@ -209,7 +209,7 @@ function createHuman() {
 
   const heldPlane = paperPlane.group.clone();
   heldPlane.name = "held-plane";
-  heldPlane.scale.setScalar(0.42);
+  heldPlane.scale.setScalar(0.36);
   heldPlane.position.set(0.02, -1.04, 0.43);
   heldPlane.rotation.x = 1.2;
   heldPlane.rotation.y = 0.03;
