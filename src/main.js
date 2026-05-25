@@ -181,7 +181,7 @@ function createHuman() {
   group.add(shoulder);
 
   const throwingArm = new THREE.Group();
-  throwingArm.rotation.z = -0.34;
+  throwingArm.rotation.z = -0.2;
   shoulder.add(throwingArm);
 
   const arm = createLimb(0.09, 0.96, materials.skin);
@@ -403,20 +403,20 @@ function updateThrowingPose(isCharging) {
   const idle = isCharging ? 0 : Math.sin(performance.now() * 0.004) * 0.018;
 
   human.shoulder.position.copy(human.rightShoulderSocket.position);
-  human.shoulder.rotation.x = THREE.MathUtils.lerp(0.42, 1.72, angleT) + idle;
-  human.shoulder.rotation.y = THREE.MathUtils.lerp(0.08, -0.18, angleT);
-  human.shoulder.rotation.z = THREE.MathUtils.lerp(-0.04, -0.14, angleT);
-  human.throwingArm.rotation.z = THREE.MathUtils.lerp(-0.34, -0.88, angleT);
+  human.shoulder.rotation.x = THREE.MathUtils.lerp(1.18, 2.16, angleT) + idle;
+  human.shoulder.rotation.y = THREE.MathUtils.lerp(0.12, -0.34, angleT);
+  human.shoulder.rotation.z = THREE.MathUtils.lerp(-0.18, -0.34, angleT);
+  human.throwingArm.rotation.z = THREE.MathUtils.lerp(-0.2, -0.64, angleT);
 }
 
 function updateLaunch(dt) {
   game.launchTimer += dt;
   const t = Math.min(game.launchTimer / 0.34, 1);
   const angleT = THREE.MathUtils.clamp(game.launchAngle / MAX_LAUNCH_ANGLE, 0, 1);
-  const startShoulderX = THREE.MathUtils.lerp(0.42, 1.72, angleT);
-  const startShoulderY = THREE.MathUtils.lerp(0.08, -0.18, angleT);
-  const startShoulderZ = THREE.MathUtils.lerp(-0.04, -0.14, angleT);
-  const startArmZ = THREE.MathUtils.lerp(-0.34, -0.88, angleT);
+  const startShoulderX = THREE.MathUtils.lerp(1.18, 2.16, angleT);
+  const startShoulderY = THREE.MathUtils.lerp(0.12, -0.34, angleT);
+  const startShoulderZ = THREE.MathUtils.lerp(-0.18, -0.34, angleT);
+  const startArmZ = THREE.MathUtils.lerp(-0.2, -0.64, angleT);
 
   human.shoulder.position.copy(human.rightShoulderSocket.position);
   human.shoulder.rotation.x = THREE.MathUtils.lerp(startShoulderX, -1.05, easeOutCubic(t));
@@ -431,7 +431,7 @@ function updateLaunch(dt) {
 }
 
 function updateFlight(dt) {
-  const steer = Number(input.right) - Number(input.left);
+  const steer = Number(input.left) - Number(input.right);
   const horizontalSpeed = Math.hypot(physics.velocity.x, physics.velocity.z);
 
   physics.velocity.y -= 9.8 * dt;
