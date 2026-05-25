@@ -32,7 +32,7 @@ const clock = new THREE.Clock();
 const input = { left: false, right: false, down: false };
 const game = { state: "ready", launchAngle: 0, launchTimer: 0, boost: 100, distance: 0, bestDistance: Number(localStorage.getItem(BEST_KEY) || 0) };
 const physics = { position: new THREE.Vector3(0, 1.55, -1.2), velocity: new THREE.Vector3(), rollTarget: 0 };
-const world = { trees: [], clouds: [], airObstacles: [], movingObstacles: [] };
+const world = { trees: [], clouds: [], dangerObstacles: [], movingObstacles: [] };
 
 const materials = {
   ground: new THREE.MeshStandardMaterial({ color: 0x6fcf79, roughness: 0.92 }),
@@ -46,8 +46,10 @@ const materials = {
   shirt: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.78 }),
   pants: new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.82 }),
   cloud: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }),
-  skyRing: new THREE.MeshStandardMaterial({ color: 0xfb923c, roughness: 0.35, metalness: 0.05 }),
-  skyMarker: new THREE.MeshStandardMaterial({ color: 0xffedd5, roughness: 0.7 }),
+  building: new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.82 }),
+  buildingDark: new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.86 }),
+  window: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.2, emissive: 0xf59e0b, emissiveIntensity: 0.35 }),
+  beacon: new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.35, emissive: 0xef4444, emissiveIntensity: 0.6 }),
   ufoBase: new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.38, metalness: 0.2 }),
   ufoDome: new THREE.MeshStandardMaterial({ color: 0x67e8f9, roughness: 0.22, transparent: true, opacity: 0.8 }),
   bigPlane: new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.48, metalness: 0.08 }),
@@ -95,11 +97,20 @@ function setupWorld() {
     if (Math.random() > 0.45) addTree(-side * (safeGap + 7 + Math.random() * 22), z + Math.random() * 8, 0.75 + Math.random() * 0.8);
   }
 
-  for (let z = 38; z <= 295; z += 24) addAirObstacle(-7.2 + Math.random() * 14.4, 8 + Math.random() * 36, z, 0.76 + Math.random() * 0.36);
-  addMovingUfo(-5, 22, 70, 1.05, 6.5, 1.15);
-  addMovingPlane(6, 33, 132, 1.0, 7.8, 0.92);
-  addMovingUfo(4, 43, 205, 1.18, 8.5, 1.05);
-  addMovingPlane(-4, 18, 270, 0.92, 6.2, 1.25);
+  for (let z = 42; z <= 295; z += 18) {
+    const x = -8.5 + Math.random() * 17;
+    if (Math.random() > 0.45) addBuildingObstacle(x, z, 16 + Math.random() * 34, 1.6 + Math.random() * 1.4, 1.6 + Math.random() * 1.2);
+    else addTallTreeObstacle(x, z, 18 + Math.random() * 30, 0.75 + Math.random() * 0.55);
+  }
+
+  addMovingUfo(-5, 22, 58, 1.05, 6.5, 1.15);
+  addMovingPlane(6, 33, 86, 1.0, 7.8, 0.92);
+  addMovingUfo(4, 43, 122, 1.18, 8.5, 1.05);
+  addMovingPlane(-4, 18, 155, 0.92, 6.2, 1.25);
+  addMovingUfo(-6, 37, 190, 1.0, 7.5, 1.32);
+  addMovingPlane(5, 27, 218, 0.95, 8.2, 1.08);
+  addMovingUfo(3, 48, 252, 1.22, 6.8, 0.98);
+  addMovingPlane(-5, 39, 286, 1.05, 7.2, 1.18);
 
   for (let i = 0; i < 22; i += 1) addCloud(-55 + Math.random() * 110, 22 + Math.random() * 28, 20 + Math.random() * 320, 0.7 + Math.random() * 1.4);
   scene.add(human.group, paperPlane.group);
@@ -214,22 +225,47 @@ function addTree(x, z, scale) {
   world.trees.push({ group, x, z, radius: 1.15 * scale, height: 5 * scale });
 }
 
-function addAirObstacle(x, y, z, scale) {
+function addBuildingObstacle(x, z, height, width, depth) {
   const group = new THREE.Group();
-  group.position.set(x, y, z);
-  group.scale.setScalar(scale);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.14, 12, 32), materials.skyRing);
-  ring.castShadow = true;
-  group.add(ring);
-  const markerTop = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8), materials.skyMarker);
-  markerTop.position.y = 1.1;
-  markerTop.castShadow = true;
-  group.add(markerTop);
-  const markerBottom = markerTop.clone();
-  markerBottom.position.y = -1.1;
-  group.add(markerBottom);
+  group.position.set(x, 0, z);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), Math.random() > 0.5 ? materials.building : materials.buildingDark);
+  body.position.y = height / 2;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+  for (let floor = 3; floor < height - 2; floor += 4.2) {
+    for (let side = -1; side <= 1; side += 2) {
+      const windowRow = new THREE.Mesh(new THREE.BoxGeometry(width * 0.72, 0.6, 0.035), materials.window);
+      windowRow.position.set(0, floor, side * (depth / 2 + 0.02));
+      group.add(windowRow);
+    }
+  }
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 8), materials.beacon);
+  beacon.position.y = height + 0.35;
+  beacon.castShadow = true;
+  group.add(beacon);
   scene.add(group);
-  world.airObstacles.push({ group, radius: 1.08 * scale });
+  world.dangerObstacles.push({ group, kind: "building", type: "box", halfWidth: width / 2, halfDepth: depth / 2, height });
+}
+
+function addTallTreeObstacle(x, z, height, scale) {
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+  group.scale.setScalar(scale);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.48, height * 0.62, 12), materials.trunk);
+  trunk.position.y = height * 0.31;
+  trunk.castShadow = true;
+  group.add(trunk);
+  const crownA = new THREE.Mesh(new THREE.ConeGeometry(2.0, height * 0.34, 16), materials.leaf);
+  crownA.position.y = height * 0.64;
+  crownA.castShadow = true;
+  group.add(crownA);
+  const crownB = new THREE.Mesh(new THREE.ConeGeometry(1.55, height * 0.3, 16), materials.darkLeaf);
+  crownB.position.y = height * 0.82;
+  crownB.castShadow = true;
+  group.add(crownB);
+  scene.add(group);
+  world.dangerObstacles.push({ group, kind: "very tall tree", type: "cylinder", radius: 1.85 * scale, height: height * scale });
 }
 
 function addMovingUfo(x, y, z, scale, amplitude, speed) {
@@ -325,7 +361,7 @@ function setInput(action, value) {
 }
 
 function resetGame() {
-  resultDialog.close();
+  if (resultDialog.open) resultDialog.close();
   Object.assign(game, { state: "ready", launchAngle: 0, launchTimer: 0, boost: 100, distance: 0 });
   physics.position.set(0, 1.55, -1.2);
   physics.velocity.set(0, 0, 0);
@@ -434,7 +470,7 @@ function updateMovingObstacles(dt) {
 
 function checkCollisions() {
   checkTreeCollision();
-  if (game.state === "flight") checkAirObstacleCollision();
+  if (game.state === "flight") checkDangerObstacleCollision();
   if (game.state === "flight") checkMovingObstacleCollision();
 }
 
@@ -446,9 +482,16 @@ function checkTreeCollision() {
   }
 }
 
-function checkAirObstacleCollision() {
-  for (const obstacle of world.airObstacles) {
-    if (physics.position.distanceTo(obstacle.group.position) < obstacle.radius + 0.45) return endGame("hit a sky ring");
+function checkDangerObstacleCollision() {
+  for (const obstacle of world.dangerObstacles) {
+    const dx = physics.position.x - obstacle.group.position.x;
+    const dz = physics.position.z - obstacle.group.position.z;
+    if (obstacle.type === "box") {
+      if (Math.abs(dx) < obstacle.halfWidth + 0.45 && Math.abs(dz) < obstacle.halfDepth + 0.65 && physics.position.y < obstacle.height + 0.8) return endGame(`hit a ${obstacle.kind}`);
+    } else {
+      const horizontalDistance = Math.hypot(dx, dz);
+      if (horizontalDistance < obstacle.radius + 0.55 && physics.position.y < obstacle.height) return endGame(`hit a ${obstacle.kind}`);
+    }
   }
 }
 
