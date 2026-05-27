@@ -1,13 +1,14 @@
-// Firebase Firestore leaderboard adapter.
-// Fill the config below after creating a Firebase project.
+// Firebase Firestore leaderboard adapter for GitHub Pages.
+// Firebase config is public by design. Protect writes with Firestore Security Rules.
 
 const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "AIzaSyAAZpXwvcBTJT9fp3OT_Zks0bvbkppJKJk",
+  authDomain: "paperplane-2cbdf.firebaseapp.com",
+  projectId: "paperplane-2cbdf",
+  storageBucket: "paperplane-2cbdf.firebasestorage.app",
+  messagingSenderId: "347747478526",
+  appId: "1:347747478526:web:05a9edcc7530cdfe386eaf",
+  measurementId: "G-Y0ZY2HHPKZ",
 };
 
 export const isLeaderboardConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
