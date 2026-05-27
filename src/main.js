@@ -14,6 +14,8 @@ const buttons = { left: document.querySelector("#left-btn"), down: document.quer
 
 const BEST_KEY = "paperplane.bestDistance.v1";
 const MAX_LAUNCH_ANGLE = 90;
+const PLAYABLE_HALF_WIDTH = 12.6;
+const WALL_X = 13.4;
 const POSE_ARM_UP = { shoulderX: 2.16, shoulderY: -0.34, shoulderZ: -0.34, armZ: -0.64 };
 const POSE_ARM_BACK = { shoulderX: 1.18, shoulderY: 0.12, shoulderZ: -0.18, armZ: -0.2 };
 
@@ -32,11 +34,13 @@ const clock = new THREE.Clock();
 const input = { left: false, right: false, down: false };
 const game = { state: "ready", launchAngle: 0, launchTimer: 0, boost: 100, distance: 0, bestDistance: Number(localStorage.getItem(BEST_KEY) || 0) };
 const physics = { position: new THREE.Vector3(0, 1.55, -1.2), velocity: new THREE.Vector3(), rollTarget: 0 };
-const world = { trees: [], clouds: [], dangerObstacles: [], movingObstacles: [] };
+const world = { trees: [], clouds: [], dangerObstacles: [], movingObstacles: [], walls: [] };
 
 const materials = {
   ground: new THREE.MeshStandardMaterial({ color: 0x6fcf79, roughness: 0.92 }),
   path: new THREE.MeshStandardMaterial({ color: 0xd8c68a, roughness: 0.96 }),
+  sideWall: new THREE.MeshStandardMaterial({ color: 0x7dd3fc, roughness: 0.35, transparent: true, opacity: 0.26, side: THREE.DoubleSide }),
+  wallEdge: new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.6 }),
   paper: new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.55, side: THREE.DoubleSide }),
   paperFold: new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.58, side: THREE.DoubleSide }),
   trunk: new THREE.MeshStandardMaterial({ color: 0x7c4a2d, roughness: 0.85 }),
@@ -90,6 +94,8 @@ function setupWorld() {
   path.receiveShadow = true;
   scene.add(path);
 
+  addBoundaryWalls();
+
   for (let z = 24; z < 310; z += 16) {
     const safeGap = z < 70 ? 7.5 : 4.5;
     const side = Math.random() > 0.5 ? 1 : -1;
@@ -114,6 +120,23 @@ function setupWorld() {
 
   for (let i = 0; i < 22; i += 1) addCloud(-55 + Math.random() * 110, 22 + Math.random() * 28, 20 + Math.random() * 320, 0.7 + Math.random() * 1.4);
   scene.add(human.group, paperPlane.group);
+}
+
+function addBoundaryWalls() {
+  for (const side of [-1, 1]) {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.75, 62, 650), materials.sideWall);
+    wall.position.set(side * WALL_X, 31, 245);
+    wall.receiveShadow = true;
+    scene.add(wall);
+
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.42, 650), materials.wallEdge);
+    rail.position.set(side * WALL_X, 0.28, 245);
+    rail.castShadow = true;
+    rail.receiveShadow = true;
+    scene.add(rail);
+
+    world.walls.push(wall, rail);
+  }
 }
 
 function createPaperPlane() {
@@ -469,9 +492,17 @@ function updateMovingObstacles(dt) {
 }
 
 function checkCollisions() {
+  checkBoundaryCollision();
+  if (game.state !== "flight") return;
   checkTreeCollision();
   if (game.state === "flight") checkDangerObstacleCollision();
   if (game.state === "flight") checkMovingObstacleCollision();
+}
+
+function checkBoundaryCollision() {
+  if (Math.abs(physics.position.x) > PLAYABLE_HALF_WIDTH) {
+    endGame("hit a wall");
+  }
 }
 
 function checkTreeCollision() {
