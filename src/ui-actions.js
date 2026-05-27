@@ -31,6 +31,7 @@ function showResult(reason = "self destruct") {
   const best = Math.max(distance, readMeters(bestDistanceEl.textContent));
   resultDistanceEl.textContent = `${distance.toFixed(1)} m · ${reason}`;
   resultBestEl.textContent = `Best ${best.toFixed(1)} m`;
+  phaseTextEl.textContent = "Game Over";
   if (!resultDialog.open) resultDialog.showModal();
   refreshLeaderboard();
 }
@@ -77,6 +78,10 @@ scoreForm?.addEventListener("submit", async (event) => {
     console.error(error);
   }
 });
+
+new MutationObserver(() => {
+  if (resultDialog.open) refreshLeaderboard();
+}).observe(resultDialog, { attributes: true, attributeFilter: ["open"] });
 
 setInterval(compactPhaseText, 120);
 refreshLeaderboard();
