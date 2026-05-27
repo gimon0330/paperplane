@@ -4,10 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Paperplane Flight</title>
-    <meta
-      name="description"
-      content="A small 3D paper plane flight game playable on mobile and desktop browsers."
-    />
+    <meta name="description" content="A small 3D paper plane flight game playable on mobile and desktop browsers." />
     <link rel="stylesheet" href="./src/styles.css" />
     <script type="importmap">
       {
@@ -21,27 +18,18 @@
     <main id="app">
       <canvas id="game-canvas" aria-label="Paperplane 3D game"></canvas>
 
-      <section class="hud hud-top" aria-live="polite">
-        <div>
-          <span class="label">Distance</span>
-          <strong id="distance">0.0 m</strong>
-        </div>
-        <div>
-          <span class="label">Best</span>
-          <strong id="best-distance">0.0 m</strong>
-        </div>
+      <section class="topbar" aria-live="polite">
+        <span>D <strong id="distance">0.0 m</strong></span>
+        <span>B <strong id="best-distance">0.0 m</strong></span>
+        <span>A <strong id="angle">0°</strong></span>
       </section>
 
-      <section class="hud status-panel">
-        <div class="angle-row">
-          <span class="label">Launch Angle</span>
-          <strong id="angle">45°</strong>
-        </div>
-        <div class="meter" title="Limited boost">
-          <div id="boost-fill" class="meter-fill"></div>
-        </div>
-        <span id="phase-text" class="phase-text">Hold ↓ to set angle, release to throw.</span>
+      <section class="meter-panel">
+        <div class="meter" title="Angle / Boost"><div id="boost-fill" class="meter-fill"></div></div>
+        <span id="phase-text">Hold ↓ · Release</span>
       </section>
+
+      <button id="self-destruct-btn" class="self-destruct" aria-label="Self destruct">자폭</button>
 
       <section class="controls" aria-label="Game controls">
         <button id="left-btn" class="control-button" aria-label="Turn left">←</button>
@@ -49,15 +37,18 @@
         <button id="right-btn" class="control-button" aria-label="Turn right">→</button>
       </section>
 
-      <aside class="desktop-help">
-        <strong>Desktop</strong>
-        <span>Hold <kbd>S</kbd>/<kbd>↓</kbd> to set angle · Release to throw · Fly with <kbd>A</kbd>/<kbd>D</kbd> and boost with <kbd>S</kbd></span>
-      </aside>
-
       <dialog id="result-dialog" class="result-dialog">
-        <h1>Flight Result</h1>
-        <p id="result-distance">Distance: 0.0 m</p>
-        <p id="result-best">Best: 0.0 m</p>
+        <h1>Result</h1>
+        <p id="result-distance">0.0 m</p>
+        <p id="result-best">Best 0.0 m</p>
+
+        <form id="score-form" class="score-form" method="dialog">
+          <input id="nickname-input" maxlength="16" placeholder="nickname" autocomplete="nickname" />
+          <button id="save-score-btn" type="submit">Save</button>
+        </form>
+        <p id="score-status" class="score-status"></p>
+        <ol id="leaderboard-list" class="leaderboard-list"></ol>
+
         <button id="restart-btn">Restart</button>
       </dialog>
     </main>
