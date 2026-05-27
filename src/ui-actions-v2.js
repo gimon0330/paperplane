@@ -21,6 +21,7 @@ scoreForm.before(nicknameLabel);
 let currentResultDistance = 0;
 let isSaving = false;
 let lastHandledResultKey = "";
+let scoreFormRemoved = false;
 
 function readMeters(text) {
   const value = Number.parseFloat(String(text || "0").replace(/[^0-9.]/g, ""));
@@ -36,18 +37,26 @@ function compactPhaseText() {
   else if (text.includes("Game over")) phaseTextEl.textContent = "Game Over";
 }
 
+function removeScoreForm() {
+  if (!scoreFormRemoved) {
+    scoreForm.remove();
+    scoreFormRemoved = true;
+  }
+}
+
 function syncNicknameUi() {
   const savedNickname = getSavedNickname();
 
   if (savedNickname) {
     nicknameLabel.hidden = false;
     nicknameLabel.textContent = `Pilot: ${savedNickname}`;
-    scoreForm.hidden = true;
-    nicknameInput.disabled = true;
-    saveScoreBtn.disabled = true;
-  } else {
-    nicknameLabel.hidden = true;
-    nicknameLabel.textContent = "";
+    removeScoreForm();
+    return;
+  }
+
+  nicknameLabel.hidden = true;
+  nicknameLabel.textContent = "";
+  if (!scoreFormRemoved) {
     scoreForm.hidden = false;
     nicknameInput.disabled = false;
     saveScoreBtn.disabled = !isLeaderboardConfigured || isSaving || currentResultDistance <= 0;
@@ -133,8 +142,7 @@ quitBtn?.addEventListener("click", () => showResult("quit"));
 scoreForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  if (isSaving) return;
-  if (getSavedNickname()) {
+  if (isSaving || getSavedNickname()) {
     syncNicknameUi();
     return;
   }
