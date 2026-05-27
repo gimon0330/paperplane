@@ -13,9 +13,14 @@ const saveScoreBtn = document.querySelector("#save-score-btn");
 const scoreStatus = document.querySelector("#score-status");
 const leaderboardList = document.querySelector("#leaderboard-list");
 
+const nicknameLabel = document.createElement("p");
+nicknameLabel.className = "score-status";
+nicknameLabel.hidden = true;
+scoreForm.before(nicknameLabel);
+
 let currentResultDistance = 0;
-let hasSavedCurrentResult = false;
 let isSaving = false;
+let lastHandledResultKey = "";
 
 function readMeters(text) {
   const value = Number.parseFloat(String(text || "0").replace(/[^0-9.]/g, ""));
@@ -31,34 +36,22 @@ function compactPhaseText() {
   else if (text.includes("Game over")) phaseTextEl.textContent = "Game Over";
 }
 
-function syncNickname() {
+function syncNicknameUi() {
   const savedNickname = getSavedNickname();
+
   if (savedNickname) {
-    nicknameInput.value = savedNickname;
+    nicknameLabel.hidden = false;
+    nicknameLabel.textContent = `Pilot: ${savedNickname}`;
+    scoreForm.hidden = true;
     nicknameInput.disabled = true;
-    nicknameInput.title = "Nickname is locked on this device.";
+    saveScoreBtn.disabled = true;
   } else {
+    nicknameLabel.hidden = true;
+    nicknameLabel.textContent = "";
+    scoreForm.hidden = false;
     nicknameInput.disabled = false;
-    nicknameInput.title = "";
+    saveScoreBtn.disabled = !isLeaderboardConfigured || isSaving || currentResultDistance <= 0;
   }
-}
-
-function syncSaveState() {
-  const localBest = getLocalRankingBest();
-  const canSave = isLeaderboardConfigured && !hasSavedCurrentResult && !isSaving && currentResultDistance > localBest;
-  saveScoreBtn.disabled = !canSave;
-
-  if (!isLeaderboardConfigured) scoreStatus.textContent = "Ranking DB not connected";
-  else if (hasSavedCurrentResult) scoreStatus.textContent = "Saved for this run";
-  else if (currentResultDistance <= localBest) scoreStatus.textContent = `Local best ${localBest.toFixed(1)} m`;
-}
-
-function prepareResult(distance) {
-  currentResultDistance = distance;
-  hasSavedCurrentResult = false;
-  isSaving = false;
-  syncNickname();
-  syncSaveState();
 }
 
 function showResult(reason = "quit") {
@@ -70,6 +63,49 @@ function showResult(reason = "quit") {
   prepareResult(distance);
   if (!resultDialog.open) resultDialog.showModal();
   refreshLeaderboard();
+}
+
+function prepareResult(distance) {
+  currentResultDistance = distance;
+  syncNicknameUi();
+
+  if (!isLeaderboardConfigured) {
+    scoreStatus.textContent = "Ranking DB not connected";
+    return;
+  }
+
+  const savedNickname = getSavedNickname();
+  if (!savedNickname) {
+    scoreStatus.textContent = "Set nickname once";
+    return;
+  }
+
+  const localBest = getLocalRankingBest();
+  if (distance > localBest) {
+    autoUpdateBest(distance);
+  } else {
+    scoreStatus.textContent = `Best ${localBest.toFixed(1)} m`;
+  }
+}
+
+async function autoUpdateBest(distance) {
+  const resultKey = `${distance.toFixed(1)}:${getSavedNickname()}`;
+  if (isSaving || lastHandledResultKey === resultKey) return;
+
+  try {
+    isSaving = true;
+    lastHandledResultKey = resultKey;
+    scoreStatus.textContent = "Updating best...";
+    const result = await submitScore(getSavedNickname(), distance);
+    scoreStatus.textContent = result.saved ? "Best updated" : `Best ${Number(result.distance || getLocalRankingBest()).toFixed(1)} m`;
+    await refreshLeaderboard();
+  } catch (error) {
+    scoreStatus.textContent = "Auto update failed";
+    console.error(error);
+  } finally {
+    isSaving = false;
+    syncNicknameUi();
+  }
 }
 
 async function refreshLeaderboard() {
@@ -86,9 +122,6 @@ async function refreshLeaderboard() {
       item.innerHTML = `${score.nickname || "pilot"} <span>${Number(score.distance || 0).toFixed(1)} m</span>`;
       leaderboardList.appendChild(item);
     }
-    if (!scoreStatus.textContent || scoreStatus.textContent === "Ranking DB not connected") {
-      scoreStatus.textContent = scores.length ? "Top 5" : "No scores yet";
-    }
   } catch (error) {
     scoreStatus.textContent = "Ranking load failed";
     console.error(error);
@@ -99,36 +132,38 @@ quitBtn?.addEventListener("click", () => showResult("quit"));
 
 scoreForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (isSaving || hasSavedCurrentResult) return;
 
-  const distance = currentResultDistance || readMeters(resultDistanceEl.textContent);
+  if (isSaving) return;
+  if (getSavedNickname()) {
+    syncNicknameUi();
+    return;
+  }
 
   if (!isLeaderboardConfigured) {
     scoreStatus.textContent = "Add Firebase config first";
     return;
   }
 
+  const nickname = nicknameInput.value.trim();
+  if (!nickname) {
+    scoreStatus.textContent = "Enter nickname";
+    return;
+  }
+
   try {
     isSaving = true;
-    syncSaveState();
+    saveScoreBtn.disabled = true;
     scoreStatus.textContent = "Saving...";
-
-    const result = await submitScore(nicknameInput.value, distance);
-    hasSavedCurrentResult = true;
-    syncNickname();
-
-    if (result.saved) scoreStatus.textContent = result.reason === "created" ? "Saved" : "Updated best";
-    else if (result.reason === "not_local_best" || result.reason === "not_remote_best") scoreStatus.textContent = `Best stays ${Number(result.distance || 0).toFixed(1)} m`;
-    else scoreStatus.textContent = "Not saved";
-
+    const result = await submitScore(nickname, currentResultDistance);
+    scoreStatus.textContent = result.saved ? "Nickname set · best saved" : "Nickname set";
+    syncNicknameUi();
     await refreshLeaderboard();
   } catch (error) {
-    hasSavedCurrentResult = false;
     scoreStatus.textContent = "Save failed";
     console.error(error);
   } finally {
     isSaving = false;
-    syncSaveState();
+    syncNicknameUi();
   }
 });
 
@@ -139,6 +174,6 @@ new MutationObserver(() => {
   }
 }).observe(resultDialog, { attributes: true, attributeFilter: ["open"] });
 
-syncNickname();
+syncNicknameUi();
 setInterval(compactPhaseText, 120);
 refreshLeaderboard();
