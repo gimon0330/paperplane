@@ -32,6 +32,14 @@ function cleanNickname(nickname) {
   return String(nickname || "pilot").trim().slice(0, 16) || "pilot";
 }
 
+function setLocalPlayerState(score) {
+  const distance = Number(score?.distance || 0);
+  const nickname = String(score?.nickname || "").trim();
+
+  if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
+  if (Number.isFinite(distance) && distance >= 0) localStorage.setItem(LOCAL_RANKING_BEST_KEY, String(distance));
+}
+
 export function getSavedNickname() {
   return localStorage.getItem(NICKNAME_KEY) || "";
 }
@@ -55,20 +63,56 @@ async function getFirestoreApi() {
   return firestoreApi;
 }
 
+export async function loadMyScore() {
+  const api = await getFirestoreApi();
+  const playerId = getOrCreatePlayerId();
+  const scoreRef = api.doc(api.db, "scores", playerId);
+  const scoreSnap = await api.getDoc(scoreRef);
+
+  if (!scoreSnap.exists()) {
+    localStorage.setItem(LOCAL_RANKING_BEST_KEY, "0");
+    return {
+      exists: false,
+      playerId,
+      nickname: getSavedNickname(),
+      distance: 0,
+    };
+  }
+
+  const score = scoreSnap.data();
+  const syncedScore = {
+    exists: true,
+    playerId,
+    nickname: score.nickname || getSavedNickname(),
+    distance: Number(score.distance || 0),
+    ...score,
+  };
+
+  setLocalPlayerState(syncedScore);
+  return syncedScore;
+}
+
+export async function syncBestFromDatabase() {
+  if (!isLeaderboardConfigured) {
+    return {
+      exists: false,
+      nickname: getSavedNickname(),
+      distance: getLocalRankingBest(),
+    };
+  }
+
+  return loadMyScore();
+}
+
 export async function submitScore(nickname, distance) {
   const api = await getFirestoreApi();
   const playerId = getOrCreatePlayerId();
   const savedNickname = getSavedNickname();
   const cleanName = savedNickname || cleanNickname(nickname);
   const cleanDistance = Number(distance.toFixed(1));
-  const localBest = getLocalRankingBest();
 
   if (!Number.isFinite(cleanDistance) || cleanDistance < 0) {
-    return { saved: false, reason: "invalid", distance: localBest, nickname: cleanName };
-  }
-
-  if (cleanDistance <= localBest) {
-    return { saved: false, reason: "not_local_best", distance: localBest, nickname: cleanName };
+    return { saved: false, reason: "invalid", distance: getLocalRankingBest(), nickname: cleanName };
   }
 
   const scoreRef = api.doc(api.db, "scores", playerId);
@@ -78,9 +122,9 @@ export async function submitScore(nickname, distance) {
   const lockedName = oldScore?.nickname || cleanName;
 
   localStorage.setItem(NICKNAME_KEY, lockedName);
+  localStorage.setItem(LOCAL_RANKING_BEST_KEY, String(oldDistance));
 
   if (oldScore && cleanDistance <= oldDistance) {
-    localStorage.setItem(LOCAL_RANKING_BEST_KEY, String(oldDistance));
     return { saved: false, reason: "not_remote_best", distance: oldDistance, nickname: lockedName };
   }
 
