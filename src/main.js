@@ -16,12 +16,14 @@ const BEST_KEY = "paperplane.bestDistance.v1";
 const MAX_LAUNCH_ANGLE = 90;
 const PLAYABLE_HALF_WIDTH = 12.6;
 const WALL_X = 13.4;
+const WALL_HEIGHT = 240;
+const WALL_CENTER_Y = WALL_HEIGHT / 2;
 const POSE_ARM_UP = { shoulderX: 2.16, shoulderY: -0.34, shoulderZ: -0.34, armZ: -0.64 };
 const POSE_ARM_BACK = { shoulderX: 1.18, shoulderY: 0.12, shoulderZ: -0.18, armZ: -0.2 };
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8bd3ff);
-scene.fog = new THREE.Fog(0x8bd3ff, 75, 230);
+scene.fog = new THREE.Fog(0x8bd3ff, 75, 260);
 
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 700);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -39,7 +41,7 @@ const world = { trees: [], clouds: [], dangerObstacles: [], movingObstacles: [],
 const materials = {
   ground: new THREE.MeshStandardMaterial({ color: 0x6fcf79, roughness: 0.92 }),
   path: new THREE.MeshStandardMaterial({ color: 0xd8c68a, roughness: 0.96 }),
-  sideWall: new THREE.MeshStandardMaterial({ color: 0x7dd3fc, roughness: 0.35, transparent: true, opacity: 0.26, side: THREE.DoubleSide }),
+  sideWall: new THREE.MeshStandardMaterial({ color: 0x7dd3fc, roughness: 0.35, transparent: true, opacity: 0.19, side: THREE.DoubleSide }),
   wallEdge: new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.6 }),
   paper: new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.55, side: THREE.DoubleSide }),
   paperFold: new THREE.MeshStandardMaterial({ color: 0xdbeafe, roughness: 0.58, side: THREE.DoubleSide }),
@@ -105,8 +107,14 @@ function setupWorld() {
 
   for (let z = 42; z <= 295; z += 18) {
     const x = -8.5 + Math.random() * 17;
-    if (Math.random() > 0.45) addBuildingObstacle(x, z, 16 + Math.random() * 34, 1.6 + Math.random() * 1.4, 1.6 + Math.random() * 1.2);
-    else addTallTreeObstacle(x, z, 18 + Math.random() * 30, 0.75 + Math.random() * 0.55);
+    if (Math.random() > 0.45) addBuildingObstacle(x, z, 22 + Math.random() * 54, 1.6 + Math.random() * 1.4, 1.6 + Math.random() * 1.2);
+    else addTallTreeObstacle(x, z, 24 + Math.random() * 58, 0.75 + Math.random() * 0.55);
+  }
+
+  for (let z = 56; z <= 296; z += 28) {
+    const x = -9.5 + Math.random() * 19;
+    if (Math.random() > 0.42) addBuildingObstacle(x, z, 86 + Math.random() * 92, 2.0 + Math.random() * 1.8, 1.8 + Math.random() * 1.6);
+    else addTallTreeObstacle(x, z, 78 + Math.random() * 86, 0.95 + Math.random() * 0.6);
   }
 
   addMovingUfo(-5, 22, 58, 1.05, 6.5, 1.15);
@@ -117,15 +125,20 @@ function setupWorld() {
   addMovingPlane(5, 27, 218, 0.95, 8.2, 1.08);
   addMovingUfo(3, 48, 252, 1.22, 6.8, 0.98);
   addMovingPlane(-5, 39, 286, 1.05, 7.2, 1.18);
+  addMovingUfo(-4, 76, 72, 1.18, 8.2, 1.08);
+  addMovingPlane(5, 96, 112, 1.08, 8.8, 1.0);
+  addMovingUfo(6, 126, 164, 1.28, 7.6, 1.22);
+  addMovingPlane(-6, 152, 226, 1.12, 8.6, 1.12);
+  addMovingUfo(2, 182, 282, 1.35, 8.2, 0.96);
 
-  for (let i = 0; i < 22; i += 1) addCloud(-55 + Math.random() * 110, 22 + Math.random() * 28, 20 + Math.random() * 320, 0.7 + Math.random() * 1.4);
+  for (let i = 0; i < 28; i += 1) addCloud(-55 + Math.random() * 110, 28 + Math.random() * 90, 20 + Math.random() * 320, 0.7 + Math.random() * 1.4);
   scene.add(human.group, paperPlane.group);
 }
 
 function addBoundaryWalls() {
   for (const side of [-1, 1]) {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.75, 62, 650), materials.sideWall);
-    wall.position.set(side * WALL_X, 31, 245);
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.75, WALL_HEIGHT, 650), materials.sideWall);
+    wall.position.set(side * WALL_X, WALL_CENTER_Y, 245);
     wall.receiveShadow = true;
     scene.add(wall);
 
@@ -135,7 +148,12 @@ function addBoundaryWalls() {
     rail.receiveShadow = true;
     scene.add(rail);
 
-    world.walls.push(wall, rail);
+    const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.7, 650), materials.wallEdge);
+    topRail.position.set(side * WALL_X, WALL_HEIGHT, 245);
+    topRail.castShadow = true;
+    scene.add(topRail);
+
+    world.walls.push(wall, rail, topRail);
   }
 }
 
@@ -550,7 +568,7 @@ function recycleClouds() {
     if (cloud.position.z < physics.position.z - 65) {
       cloud.position.z = physics.position.z + 240 + Math.random() * 120;
       cloud.position.x = -60 + Math.random() * 120;
-      cloud.position.y = 24 + Math.random() * 32;
+      cloud.position.y = 42 + Math.random() * 110;
     }
   }
 }
