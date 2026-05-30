@@ -1,4 +1,4 @@
-import { getLocalRankingBest, getSavedNickname, isLeaderboardConfigured, loadLeaderboard, submitScore } from "./leaderboard.js";
+import { getLocalRankingBest, getSavedNickname, isLeaderboardConfigured, loadLeaderboard, submitScore, syncBestFromDatabase } from "./leaderboard.js";
 
 const quitBtn = document.querySelector("#self-" + "destruct-btn");
 const resultDialog = document.querySelector("#result-dialog");
@@ -26,6 +26,12 @@ let scoreFormRemoved = false;
 function readMeters(text) {
   const value = Number.parseFloat(String(text || "0").replace(/[^0-9.]/g, ""));
   return Number.isFinite(value) ? value : 0;
+}
+
+function setBestText(distance) {
+  const bestText = `${Number(distance || 0).toFixed(1)} m`;
+  resultBestEl.textContent = `Best ${bestText}`;
+  bestDistanceEl.textContent = bestText;
 }
 
 function compactPhaseText() {
@@ -65,16 +71,16 @@ function syncNicknameUi() {
 
 function showResult(reason = "quit") {
   const distance = readMeters(distanceEl.textContent);
-  const best = Math.max(distance, readMeters(bestDistanceEl.textContent));
+  const fallbackBest = Math.max(distance, readMeters(bestDistanceEl.textContent));
   resultDistanceEl.textContent = `${distance.toFixed(1)} m · ${reason}`;
-  resultBestEl.textContent = `Best ${best.toFixed(1)} m`;
+  setBestText(fallbackBest);
   phaseTextEl.textContent = "Game Over";
   prepareResult(distance);
   if (!resultDialog.open) resultDialog.showModal();
   refreshLeaderboard();
 }
 
-function prepareResult(distance) {
+async function prepareResult(distance) {
   currentResultDistance = distance;
   syncNicknameUi();
 
@@ -89,16 +95,27 @@ function prepareResult(distance) {
     return;
   }
 
-  const localBest = getLocalRankingBest();
-  if (distance > localBest) {
-    autoUpdateBest(distance);
-  } else {
-    scoreStatus.textContent = `Best ${localBest.toFixed(1)} m`;
+  try {
+    scoreStatus.textContent = "Checking DB best...";
+    const dbScore = await syncBestFromDatabase();
+    const dbBest = Number(dbScore?.distance || 0);
+    setBestText(dbBest);
+
+    if (distance > dbBest) {
+      await autoUpdateBest(distance, dbBest);
+    } else {
+      scoreStatus.textContent = `DB best ${dbBest.toFixed(1)} m`;
+    }
+  } catch (error) {
+    const localBest = getLocalRankingBest();
+    setBestText(localBest);
+    scoreStatus.textContent = "DB sync failed";
+    console.error(error);
   }
 }
 
-async function autoUpdateBest(distance) {
-  const resultKey = `${distance.toFixed(1)}:${getSavedNickname()}`;
+async function autoUpdateBest(distance, previousBest = getLocalRankingBest()) {
+  const resultKey = `${distance.toFixed(1)}:${previousBest.toFixed(1)}:${getSavedNickname()}`;
   if (isSaving || lastHandledResultKey === resultKey) return;
 
   try {
@@ -106,7 +123,9 @@ async function autoUpdateBest(distance) {
     lastHandledResultKey = resultKey;
     scoreStatus.textContent = "Updating best...";
     const result = await submitScore(getSavedNickname(), distance);
-    scoreStatus.textContent = result.saved ? "Best updated" : `Best ${Number(result.distance || getLocalRankingBest()).toFixed(1)} m`;
+    const best = Number(result.distance || distance || previousBest || 0);
+    setBestText(best);
+    scoreStatus.textContent = result.saved ? "Best updated" : `DB best ${best.toFixed(1)} m`;
     await refreshLeaderboard();
   } catch (error) {
     scoreStatus.textContent = "Auto update failed";
@@ -163,6 +182,7 @@ scoreForm?.addEventListener("submit", async (event) => {
     saveScoreBtn.disabled = true;
     scoreStatus.textContent = "Saving...";
     const result = await submitScore(nickname, currentResultDistance);
+    setBestText(result.distance || currentResultDistance);
     scoreStatus.textContent = result.saved ? "Nickname set · best saved" : "Nickname set";
     syncNicknameUi();
     await refreshLeaderboard();
